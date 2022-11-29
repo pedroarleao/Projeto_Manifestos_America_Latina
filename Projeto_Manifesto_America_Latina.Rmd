@@ -1,0 +1,145 @@
+---
+title: "Projeto_Manifestos_America_Latina"
+author: "Pedro_Leao"
+date: "2022-11-29"
+output: word_document
+---
+
+```{r}
+knitr::opts_chunk$set(echo=FALSE, error=FALSE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+library(knitr)
+library(ggthemes)
+library(readxl)
+library(kableExtra)
+library(flextable)
+library(fmsb)
+library(tidylog)
+library(FSA)
+library(nortest)
+library(gtsummary)
+library(ggpubr)
+library(gt)
+
+```
+
+```{r}
+#Baixando e organizando o banco
+MPDataset_MPDSSA2022a <- read_excel("MPDataset_MPDSSA2022a.xlsx", col_names = T)
+
+MPDataset_MPDSSA2022a <- MPDataset_MPDSSA2022a %>% #Retirando os NAs (Brizola, PDT e Maluf, PDS)
+  slice(-78, -81) %>% #dividindo a informação da v. date (para criar a variável ano)
+  separate(date, c("ano", "mes"), 4 ) %>% #selecionando as variaveis relevantes
+  select(countryname, ano, partyname, partyabbrev, candidatename,per201_1, per303, per401, per407, per414, per505, per702, per402, per403, per404, per409, per402, per410, per411, per701, per202_4, per301, per503, per606_1, per606_2, per607_3, per705, per202_2, per204, per305_1, per305_2, per405, per603, per605_1)
+
+#Somando as variáveis percentuais de cada indicador em grupos de projetos políticos
+banco_trabalho <- MPDataset_MPDSSA2022a %>% 
+  group_by(ano, partyname) %>% 
+  mutate(total_frequencias_neolib = sum(per201_1, per303, per401, per407, per414, per505, per702),
+         total_frequencias_neodes = sum(per402, per403, per404, per409, per410, per411, per701), 
+         total_frequencias_dempart = sum(per202_4, per301, per503, per606_1, per606_2, per607_3, per705), 
+         total_frequencias_autconserv = sum(per202_2, per204, per305_1, per305_2, per405,per603, per605_1)) %>% 
+  ungroup()
+
+```
+
+
+```{r}
+#testes de normalidade
+banco_trabalho_pivoted <- banco_trabalho %>% 
+  pivot_longer(c(total_frequencias_neodes, total_frequencias_dempart, total_frequencias_autconserv,total_frequencias_neolib)) 
+
+#QQplot para todo o conjunto de dados e para cada grupo
+ggqqplot(banco_trabalho_pivoted$value)
+ggqqplot(banco_trabalho$total_frequencias_neolib)
+ggqqplot(banco_trabalho$total_frequencias_neodes)
+ggqqplot(banco_trabalho$total_frequencias_dempart)
+ggqqplot(banco_trabalho$total_frequencias_autconserv)
+
+#Seguindo Razali e Wah (2011) (na bibliografia), faz-se Shapiro-Wilk e Anderson-Darling
+shapiro.test(banco_trabalho_pivoted$value) #significativamente diferente da normal
+ad.test(banco_trabalho_pivoted$value) #significativamente diferente da normal
+
+shapiro.test(banco_trabalho$total_frequencias_neolib) #significativamente diferente da normal
+shapiro.test(banco_trabalho$total_frequencias_neodes)# Não significativamente diferente da normal
+shapiro.test(banco_trabalho$total_frequencias_dempart)# Não significativamente diferente da normal
+shapiro.test(banco_trabalho$total_frequencias_autconserv)#significativamente diferente da normal
+
+ad.test(banco_trabalho$total_frequencias_neolib)#significativamente diferente da normal
+ad.test(banco_trabalho$total_frequencias_neodes)# Não significativamente diferente da normal
+ad.test(banco_trabalho$total_frequencias_dempart)# Não significativamente diferente da normal
+ad.test(banco_trabalho$total_frequencias_autconserv)#significativamente diferente da normal
+```
+Hipóteses dos dois testes: 
+H0: The data follows the normal distribution
+H1: The data do not follow the normal distribution
+
+```{r echo=FALSE}
+##Estatísticas descritivas dos grupos gerais de projetos políticos
+#Boxplot
+banco_trabalho_pivoted %>% 
+  mutate(name =case_when (
+                                          name == "total_frequencias_neodes" ~ "Neodesenvolvimentista", 
+                                          name == "total_frequencias_dempart" ~ "Democrático-participativo",
+                                          name == "total_frequencias_autconserv"  ~ "Autoritário-conservador",
+                                          name == "total_frequencias_neolib"  ~ "Neoliberal")) %>% 
+  ggplot(aes(x=reorder(name, value), y=value)) +
+  geom_boxplot( fill= c("#E19825", "#B19C7D", "#7F5F52", "#B27D49")) +
+  geom_jitter(color="#A5300F", size=.8, width = .08, shape=8) +
+  xlab("Projeto Político") + ylab("Frequência %") +theme_classic()
+
+#Estatísticas descritivas
+options(digits = 3)
+est.desc.neolib <- banco_trabalho %>% 
+  summarize(Mín = min (total_frequencias_neolib), 
+            Q1 = quantile(total_frequencias_neolib, probs=0.25), 
+            Mediana = median(total_frequencias_neolib), 
+            Média = mean(total_frequencias_neolib), 
+            Sd= sd(total_frequencias_neolib), 
+            Q3 = quantile(total_frequencias_neolib, probs=0.75),
+            Máx = max(total_frequencias_neolib))
+
+est.desc.neodes <-banco_trabalho %>% 
+  summarize(Mín = min (total_frequencias_neodes), 
+            Q1 = quantile(total_frequencias_neodes, probs=0.25), 
+            Mediana = median(total_frequencias_neodes), 
+            Média = mean(total_frequencias_neodes), 
+            Sd= sd(total_frequencias_neodes), 
+            Q3 = quantile(total_frequencias_neodes, probs=0.75),
+            Máx = max(total_frequencias_neodes))
+
+est.desc.dempart <-banco_trabalho %>% 
+  summarize(Mín = min (total_frequencias_dempart), 
+            Q1 = quantile(total_frequencias_dempart, probs=0.25), 
+            Mediana = median(total_frequencias_dempart), 
+            Média = mean(total_frequencias_dempart), 
+            Sd= sd(total_frequencias_dempart), 
+            Q3 = quantile(total_frequencias_dempart, probs=0.75),
+            Máx = max(total_frequencias_dempart))
+
+est.desc.autcon <-banco_trabalho %>% 
+  summarize(Mín = min (total_frequencias_autconserv), 
+            Q1 = quantile(total_frequencias_autconserv, probs=0.25), 
+            Mediana = median(total_frequencias_autconserv), 
+            Média = mean(total_frequencias_autconserv), 
+            Sd= sd(total_frequencias_autconserv), 
+            Q3 = quantile(total_frequencias_autconserv, probs=0.75),
+            Máx = max(total_frequencias_autconserv))
+
+est.desc.geral <- full_join(est.desc.neolib, est.desc.neodes, c("Mín", "Q1", "Mediana", "Média", "Sd", "Q3", "Máx"))
+est.desc.geral <- full_join(est.desc.geral, est.desc.dempart, c("Mín", "Q1", "Mediana", "Média", "Sd", "Q3", "Máx"))
+est.desc.geral <- full_join(est.desc.geral, est.desc.autcon, c("Mín", "Q1", "Mediana", "Média", "Sd", "Q3", "Máx")) 
+est.desc.geral <- as.data.frame(t(est.desc.geral)) 
+est.desc.geral <- est.desc.geral %>% 
+  rename("Neoliberal"=V1, "Neodesenvolvimentista"=V2, "Democrático-participativo"=V3, "Autoritário-conservador"=V4) %>% 
+  mutate(Est. = c("Mín", "Q1", "Mediana", "Média", "Sd", "Q3", "Máx")) %>%
+  relocate(Est., .before= Neoliberal) 
+
+gt(est.desc.geral)
+
+```
+
+
+
+
